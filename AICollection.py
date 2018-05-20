@@ -150,7 +150,7 @@ class GameListener(object):
 def go_listen():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--server_url', default='http://192.168.7.61:11111')
+    parser.add_argument('--server_url', default='http://120.132.59.147:11111')
     args = parser.parse_args()
 
 

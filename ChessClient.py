@@ -10,6 +10,9 @@ from ChessBoard import ChessBoard
 from Hall import GameRoom
 from Hall import User
 import random
+import sys
+sys.path.insert(0, '/home/mingzhang/work/RL/')
+import AlphaZero_Gomoku_15x15 as gomoku_zm
 
 
 class ChessClient():
@@ -147,18 +150,56 @@ class GameStrategy_random():
         return move
 
 
+class GameStrategy_MZhang():
+    def __init__(self, startplayer=0):
+        model_file = '/home/mingzhang/work/RL/AlphaZero_Gomoku_15x15/current_policy.model'
+        policy_param = None
+        self.height = 15
+        self.width = 15
+        if model_file is not None:
+           print('loading...', model_file)
+           try:
+               policy_param = pickle.load(open(model_file, 'rb'))
+           except:
+               policy_param = pickle.load(open(model_file, 'rb'), encoding='bytes')
+        policy_value_net = gomoku_zm.policy_value_net_mxnet.PolicyValueNet(self.height, self.width, model_params=policy_param)
+        self.mcts_player = gomoku_zm.mcts_alphaZero.MCTSPlayer(policy_value_net.policy_value_fn, c_puct=5, n_playout=1000)
+        self.board = gomoku_zm.game.Board(width=self.width, height=self.height, n_in_row=5)
+        self.board.init_board(startplayer)
+        self.game = gomoku_zm.game.Game(self.board)
+        p1, p2 = self.board.players
+        print('players:', p1, p2)
+        self.mcts_player.set_player_ind(p1)
+        pass
+
+    def play_one_piece(self, user, gameboard):
+        print('user:', gameboard.get_current_user())
+        print('gameboard:', gameboard.move_history)
+        lastm = gameboard.get_lastmove()
+        if lastm[0] != -1:
+            usr, n, row, col = lastm
+            mv = (self.height-row-1)*self.height+col
+            if not self.board.states.has_key(mv):
+                self.board.do_move(mv)
+            
+        print('board:', self.board.states.items())
+        move = self.mcts_player.get_action(self.board)
+        self.board.do_move(move)
+        self.game.graphic(self.board, *self.board.players) 
+        outmv = (self.height-move//self.height-1, move%self.width)
+        
+        return outmv
+
+
+
 def go_play():
     import argparse
+    import time
     parser = argparse.ArgumentParser()
-    parser.add_argument('--room_name', type=str, default='test_room')
-    parser.add_argument('--server_url', default='http://192.168.7.61:11111')
+    parser.add_argument('--room_name', type=str, default='yixin_mzhang_'+str(time.time()))
+    parser.add_argument('--server_url', default='http://120.132.59.147:11111')
     parser.add_argument('--ai', default='random')
     args = parser.parse_args()
-
-    if args.ai == 'random':
-        strategy = GameStrategy_random()
-    else:
-        assert False, "No other ai, you can add one or import the AICollection's ai."
 
     client = ChessClient(args.server_url)
     client.login_in_guest()
@@ -166,6 +207,12 @@ def go_play():
     client.join_game()
     user = client.get_user_info()
     print "加入游戏成功，你是:" + ("黑方" if user.game_role == 1 else "白方")
+
+    if args.ai == 'random':
+        strategy = GameStrategy_MZhang(user.game_role-1)
+    else:
+        assert False, "No other ai, you can add one or import the AICollection's ai."
+
     while True:
         wait_time = client.wait_game_info_changed()
         print 'wait_time:', wait_time
